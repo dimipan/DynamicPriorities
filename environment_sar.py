@@ -9,7 +9,7 @@ from IPython.display import clear_output
 from InformationCollection import InfoLocation, InfoCollectionSystem
 from LLM_ContextExtractor import DisasterResponseAssistant
 from robot_utils import get_file_type, RobotAction, GridTile, RobotOption, NavigationActions, InformationCollectionActions, OperationTriageActions
-from shaping_mechanisms import RewardShapingMechanism
+# from shaping_mechanisms import RewardShapingMechanism
 
 class searchANDrescueRobot:
     def __init__(self, grid_rows: int, grid_cols: int, info_number_needed: int, attention: bool, hierarchical: bool):
@@ -436,7 +436,7 @@ class SARrobotEnv(gym.Env):
         self.infoLocationActionsPenalty = -5  # New penalty for exceeding action limit at info locations
         self.winReward = 100
         self.gamma = 0.99  # Discount factor for reward shaping
-        self.reward_shaping_mechanism = RewardShapingMechanism(gamma=self.gamma)
+        # self.reward_shaping_mechanism = RewardShapingMechanism(gamma=self.gamma)
     
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
