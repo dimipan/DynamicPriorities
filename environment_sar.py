@@ -18,7 +18,13 @@ class searchANDrescueRobot:
         self.hierarchical = hierarchical
         self.attention = attention
         self.info_number_needed = info_number_needed
-        self._reset()
+        # self._reset()
+
+        self.init_positions = [[2,1]]#, [2, 1], [3, 3]]
+        self.target_pos = [0, 3] # 0, 3
+
+        self.ditches = [(1, 0), (2, 0), (1, 2)]
+        self.GENERAL_FIRES_UNKNOWN_TO_THE_AGENT = [(1, 3), (2, 3), (3, 1)] ## for evaluation
 
         # Define information locations dynamically based on info_number_needed
         info_locations = self._generate_info_locations(info_number_needed)
@@ -48,6 +54,7 @@ class searchANDrescueRobot:
         # Add collision counter
         self.hazard_collisions = 0
         self.episode_collisions = 0  # Track collisions per episode
+        self._reset()
     
 
     def _generate_info_locations(self, count):
@@ -76,13 +83,11 @@ class searchANDrescueRobot:
     
     def _reset(self, seed=None):
         self.ask_action_counter = 0
-        self.init_positions = [[2,1]]#, [2, 1], [3, 3]]
         self.robot_pos = random.choice(self.init_positions)
         self.has_saved = 0
         if self.hierarchical:
             self.current_option = RobotOption.NAVIGATION.value
-        self.target_pos = [0, 3] # 0, 3
-
+       
         # Generate info locations dynamically
         info_locations = self._generate_info_locations(self.info_number_needed)
         
@@ -94,8 +99,6 @@ class searchANDrescueRobot:
             self.info_system.reset_episode()
         
         # Reset other states
-        self.ditches = [(1, 0), (2, 0), (1, 2)]
-        self.GENERAL_FIRES_UNKNOWN_TO_THE_AGENT = [(1, 3), (2, 3), (3, 1)] ## for evaluation
         self.POIs, self.fires = [], []
         self.visited_information_state = False
         self.visited_pois = set()
@@ -104,7 +107,6 @@ class searchANDrescueRobot:
         self.info_location_actions = {tuple(loc.position): 0 for loc in self.info_system.info_locations}
         self.max_info_location_actions = 2
         self.total_info_location_actions = 0
-
         self.episode_collisions = 0 # Reset collision counter for new episode
 
     def _is_valid_robot_action(self, robot_action: RobotAction) -> bool:

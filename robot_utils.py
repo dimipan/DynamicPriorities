@@ -173,11 +173,11 @@ class RunningParameters:
         self.ALPHA = 0.1         # Learning rate
         self.GAMMA = 0.99        # Discount factor
         self.EPSILON_MAX = 1.0   # Exploration rate
-        self.EPSILON_MIN = 0.01  # Minimum exploration rate
+        self.EPSILON_MIN = 0.1  # Minimum exploration rate
         self.DECAY_RATE = 2      # Decay rate for exploration rate
         self.POSITIVE_ATTENTION_VALUE = 2.0    # Attention space values/rewards
         self.NEGATIVE_ATTENTION_VALUE = -100.0 # Attention space values/rewards
         self.SAVE_ACTION_VALUE = 100.0         # Attention space values/rewards
-        self.testing_runs = 1    # Number of testing runs   
+        self.testing_runs = 10    # Number of testing runs   
         self.evaluation_runs = 1
         self.sleeping_time = 60.0
