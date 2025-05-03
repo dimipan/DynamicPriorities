@@ -1197,7 +1197,16 @@ class QLearningAgentMaxInfoRL:
 
         # Q-table reset strength after context change
         self.q_table_reset_factor = 0.5  # How much to reset Q-values (0=complete reset, 1=no reset)
-    
+
+
+        # --- New attributes for performance-based detection ---
+        self.performance_history = []  # Store episode returns
+        self.context_detection_window = 500 # Number of episodes to look back for comparison
+        self.recent_window_size = 500     # Number of recent episodes to average
+        self.performance_drop_threshold = 0.7 # Trigger if recent performance is < 70% of previous
+        self.last_detection_episode = -1 # Episode where the last shift was detected
+        self.min_episodes_between_detections = 50 # Avoid detecting too frequently
+        # --- End new attributes ---
     
     def save_learned_policy(self, episode: Union[int, str], manager=None, workers=None):
         """Save Q-tables for either flat or hierarchical agent"""
@@ -1292,6 +1301,9 @@ class QLearningAgentMaxInfoRL:
             print(f"Priority change detected: Boosting Epsilon to {self.EPSILON:.4f} for {self.epsilon_boost_duration} episodes.")
         # --- End Epsilon Boost Activation ---
     
+
+    
+    
     def _partial_reset_q_tables(self):
         """
         Partially reset Q-tables to encourage re-exploration after context shift.
@@ -1338,7 +1350,7 @@ class QLearningAgentMaxInfoRL:
             
             # Higher reward for less-visited information locations
             info_count = self.info_location_visits[pos_tuple]
-            info_location_reward = 2.0 / np.sqrt(info_count)  # Higher multiplier for info locations
+            info_location_reward = 1.0 / np.sqrt(info_count)  # Higher multiplier for info locations
         
         # 3. Collection order alignment reward (unchanged)
         order_alignment_reward = 0.0
@@ -1354,9 +1366,9 @@ class QLearningAgentMaxInfoRL:
         
         # Combine all rewards with adjusted weights
         combined_reward = (
-            0.1 * general_novelty_reward +     # General exploration (10%)
+            0.3 * general_novelty_reward +     # General exploration (10%)
             0.4 * info_location_reward +       # Info location exploration (40%)
-            0.5 * order_alignment_reward       # Collection order alignment (50%)
+            0.3 * order_alignment_reward       # Collection order alignment (50%)
         )
 
         return combined_reward
@@ -1522,7 +1534,49 @@ class QLearningAgentMaxInfoRL:
                 self.collection_order_attempts = 0
                 self.collection_order_successes = 0
     
-    def train(self, num_episodes, change_priorities_at=None):
+    ### newwwww --------------
+    def _detect_priority_shift(self, current_episode):
+        """
+        Detect a potential priority shift based on performance degradation.
+
+        Args:
+            current_episode (int): The current episode number.
+
+        Returns:
+            bool: True if a significant performance drop is detected, False otherwise.
+        """
+        # Check if enough history is available and enough time passed since last detection
+        if (len(self.performance_history) < self.context_detection_window or
+            current_episode < self.last_detection_episode + self.min_episodes_between_detections):
+            return False
+
+        # Calculate performance averages
+        recent_performance = np.mean(self.performance_history[-self.recent_window_size:])
+        previous_window_end = len(self.performance_history) - self.recent_window_size
+        previous_window_start = max(0, previous_window_end - (self.context_detection_window - self.recent_window_size))
+        
+        # Ensure the previous window has data
+        if previous_window_start >= previous_window_end:
+             return False
+             
+        previous_performance = np.mean(self.performance_history[previous_window_start:previous_window_end])
+
+        # Avoid division by zero or near-zero
+        if previous_performance < 1e-6: # Use a small threshold instead of exactly zero
+            return False
+
+        # Check for significant drop
+        if recent_performance < previous_performance * self.performance_drop_threshold:
+            print(f"\n--- Performance Drop Detected at Episode {current_episode} ---")
+            print(f"  Recent Avg Reward ({self.recent_window_size} episodes): {recent_performance:.2f}")
+            print(f"  Previous Avg Reward ({self.context_detection_window - self.recent_window_size} episodes): {previous_performance:.2f}")
+            print(f"  Ratio: {recent_performance / previous_performance:.2f} (Threshold: {self.performance_drop_threshold:.2f})")
+            return True
+
+        return False
+    
+    def train(self, num_episodes, change_priorities_at=None, detect_shifts_autonomously=False):
+    # def train(self, num_episodes, change_priorities_at=None):
         """
         Train the agent with the option to change information collection priorities mid-training.
         
@@ -1546,11 +1600,15 @@ class QLearningAgentMaxInfoRL:
         collision_counts_successful = []
 
         for episode in tqdm(range(num_episodes)):
+            
+            priority_changed_this_episode = False # Flag for this episode   #### neww
+
             # Check if we need to change priorities at this episode
             if change_priorities_at and episode in change_priorities_at:
-                self.change_collection_priorities(change_priorities_at[episode], episode)
+                print(f"\n--- Explicit Priority Change Triggered at Episode {episode} ---")
+                # self.change_collection_priorities(change_priorities_at[episode], episode)
                 # Partially reset Q-tables to encourage re-exploration
-                self._partial_reset_q_tables()
+                # self._partial_reset_q_tables()
         
             if episode % 500 == 0:
                 print(f"episode: {episode} | reward: {Rewards} | epsilon: {self.EPSILON}")
@@ -1587,6 +1645,27 @@ class QLearningAgentMaxInfoRL:
                 if self.env.sar_robot.info_system.get_collected_info_count() >= self.required_info_count and not episode_info_collected:
                     episode_info_collected = True
                     info_collection_completed_episodes += 1
+
+
+            # --- Store performance and Check for Autonomous Detection ---
+            self.performance_history.append(Rewards) # Store episode reward
+            if detect_shifts_autonomously and not priority_changed_this_episode:
+                if self._detect_priority_shift(episode):
+                    print(f"Autonomous shift detection triggered adaptation at episode {episode}.")
+                    # React to the detected shift
+                    self._partial_reset_q_tables()
+
+                    # Activate Epsilon Boost (if not already active)
+                    if not self.epsilon_boost_active:
+                        self.epsilon_boost_active = True
+                        self.epsilon_boost_episodes_remaining = self.epsilon_boost_duration
+                        self.original_epsilon_before_boost = self.EPSILON
+                        boosted_epsilon = min(self.EPSILON_MAX, self.EPSILON * self.epsilon_boost_factor)
+                        self.EPSILON = boosted_epsilon
+                        print(f"Boosting Epsilon to {self.EPSILON:.4f} for {self.epsilon_boost_duration} episodes.")
+
+                    self.last_detection_episode = episode # Record detection episod
+
 
             # Check adaptation progress if priorities have changed
             self._check_adaptation_progress(episode, steps_cnt, episode_mission_completed)
