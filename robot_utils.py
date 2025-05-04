@@ -76,30 +76,10 @@ class RobotAction(Enum):
     COLLECT_A = 7
     COLLECT_B = 8
     COLLECT_C = 9
-    COLLECT_D = 10
-    COLLECT_E = 11
-    COLLECT_F = 12
-    COLLECT_G = 13
-    COLLECT_H = 14
-    COLLECT_I = 15
-    COLLECT_J = 16
-    COLLECT_K = 17
-    COLLECT_L = 18
-    COLLECT_M = 19
-    COLLECT_N = 20
-    COLLECT_O = 21
-    COLLECT_P = 22
-    COLLECT_Q = 23
-    COLLECT_R = 24
-    COLLECT_S = 25
-    COLLECT_T = 26
-    COLLECT_U = 27
-    COLLECT_V = 28
-    COLLECT_W = 29
-    SAVE = 30
-    USE = 31
-    REMOVE = 32
-    CARRY = 33
+    SAVE = 10
+    USE = 11
+    REMOVE = 12
+    CARRY = 13
 
 class GridTile(Enum):
     _FLOOR = 0
@@ -178,6 +158,6 @@ class RunningParameters:
         self.POSITIVE_ATTENTION_VALUE = 2.0    # Attention space values/rewards
         self.NEGATIVE_ATTENTION_VALUE = -100.0 # Attention space values/rewards
         self.SAVE_ACTION_VALUE = 100.0         # Attention space values/rewards
-        self.testing_runs = 10    # Number of testing runs   
+        self.testing_runs = 1    # Number of testing runs   
         self.evaluation_runs = 1
         self.sleeping_time = 60.0

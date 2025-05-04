@@ -1200,12 +1200,22 @@ class QLearningAgentMaxInfoRL:
 
 
         # --- New attributes for performance-based detection ---
-        self.performance_history = []  # Store episode returns
-        self.context_detection_window = 500 # Number of episodes to look back for comparison
-        self.recent_window_size = 500     # Number of recent episodes to average
-        self.performance_drop_threshold = 0.7 # Trigger if recent performance is < 70% of previous
-        self.last_detection_episode = -1 # Episode where the last shift was detected
-        self.min_episodes_between_detections = 50 # Avoid detecting too frequently
+        # --- New attributes for performance-based detection ---
+        self.performance_history = []        # Store episode returns
+        self.context_detection_window = 100  # CHANGED: Smaller window (was 500)
+        self.recent_window_size = 20         # CHANGED: Smaller recent window (was 50)
+        self.performance_drop_threshold = 0.8 # CHANGED: More sensitive threshold (was 0.7)
+        self.last_detection_episode = -1     # Episode where the last shift was detected
+        self.min_episodes_between_detections = 10 # CHANGED: More frequent checks (was 50)
+
+        # Add this new attribute to track detection metrics
+        self.detection_metrics = {
+            'episode': [],
+            'recent_performance': [],
+            'previous_performance': [],
+            'ratio': [],
+            'detection_triggered': []
+        }
         # --- End new attributes ---
     
     def save_learned_policy(self, episode: Union[int, str], manager=None, workers=None):
@@ -1291,15 +1301,15 @@ class QLearningAgentMaxInfoRL:
         print(f"\nCollection priorities changed at episode {episode}")
         print(f"New collection order: {new_order_map}")
 
-        # --- Activate Epsilon Boost ---
-        if not self.epsilon_boost_active: # Avoid boosting if already boosting
-            self.epsilon_boost_active = True
-            self.epsilon_boost_episodes_remaining = self.epsilon_boost_duration
-            self.original_epsilon_before_boost = self.EPSILON
-            boosted_epsilon = min(self.EPSILON_MAX, self.EPSILON * self.epsilon_boost_factor)
-            self.EPSILON = boosted_epsilon
-            print(f"Priority change detected: Boosting Epsilon to {self.EPSILON:.4f} for {self.epsilon_boost_duration} episodes.")
-        # --- End Epsilon Boost Activation ---
+        # # --- Activate Epsilon Boost ---
+        # if not self.epsilon_boost_active: # Avoid boosting if already boosting
+        #     self.epsilon_boost_active = True
+        #     self.epsilon_boost_episodes_remaining = self.epsilon_boost_duration
+        #     self.original_epsilon_before_boost = self.EPSILON
+        #     boosted_epsilon = min(self.EPSILON_MAX, self.EPSILON * self.epsilon_boost_factor)
+        #     self.EPSILON = boosted_epsilon
+        #     print(f"Priority change detected: Boosting Epsilon to {self.EPSILON:.4f} for {self.epsilon_boost_duration} episodes.")
+        # # --- End Epsilon Boost Activation ---
     
 
     
@@ -1534,10 +1544,10 @@ class QLearningAgentMaxInfoRL:
                 self.collection_order_attempts = 0
                 self.collection_order_successes = 0
     
-    ### newwwww --------------
     def _detect_priority_shift(self, current_episode):
         """
         Detect a potential priority shift based on performance degradation.
+        Also logs detection metrics for analysis.
 
         Args:
             current_episode (int): The current episode number.
@@ -1545,35 +1555,172 @@ class QLearningAgentMaxInfoRL:
         Returns:
             bool: True if a significant performance drop is detected, False otherwise.
         """
+        # Initialize metrics for this check
+        metrics = {
+            'recent_performance': None,
+            'previous_performance': None,
+            'ratio': None,
+            'triggered': False
+        }
+        
         # Check if enough history is available and enough time passed since last detection
         if (len(self.performance_history) < self.context_detection_window or
             current_episode < self.last_detection_episode + self.min_episodes_between_detections):
+            # Log skipped check
+            self.detection_metrics['episode'].append(current_episode)
+            self.detection_metrics['recent_performance'].append(None)
+            self.detection_metrics['previous_performance'].append(None)
+            self.detection_metrics['ratio'].append(None)
+            self.detection_metrics['detection_triggered'].append(False)
             return False
 
         # Calculate performance averages
         recent_performance = np.mean(self.performance_history[-self.recent_window_size:])
+        metrics['recent_performance'] = recent_performance
+        
         previous_window_end = len(self.performance_history) - self.recent_window_size
         previous_window_start = max(0, previous_window_end - (self.context_detection_window - self.recent_window_size))
         
         # Ensure the previous window has data
         if previous_window_start >= previous_window_end:
-             return False
-             
+            # Log incomplete data
+            self.detection_metrics['episode'].append(current_episode)
+            self.detection_metrics['recent_performance'].append(recent_performance)
+            self.detection_metrics['previous_performance'].append(None)
+            self.detection_metrics['ratio'].append(None)
+            self.detection_metrics['detection_triggered'].append(False)
+            return False
+            
         previous_performance = np.mean(self.performance_history[previous_window_start:previous_window_end])
+        metrics['previous_performance'] = previous_performance
 
         # Avoid division by zero or near-zero
-        if previous_performance < 1e-6: # Use a small threshold instead of exactly zero
+        if previous_performance < 1e-6:
+            # Log data without ratio
+            self.detection_metrics['episode'].append(current_episode)
+            self.detection_metrics['recent_performance'].append(recent_performance)
+            self.detection_metrics['previous_performance'].append(previous_performance)
+            self.detection_metrics['ratio'].append(None)
+            self.detection_metrics['detection_triggered'].append(False)
             return False
+
+        # Calculate ratio
+        ratio = recent_performance / previous_performance
+        metrics['ratio'] = ratio
+
+        # Store complete metrics regardless of detection
+        self.detection_metrics['episode'].append(current_episode)
+        self.detection_metrics['recent_performance'].append(recent_performance)
+        self.detection_metrics['previous_performance'].append(previous_performance)
+        self.detection_metrics['ratio'].append(ratio)
+        
+        # Add debug output when ratio is potentially concerning
+        if ratio < 1.0 and current_episode > 1500:  # Only log when relevant
+            print(f"DEBUG - Episode {current_episode}: Recent avg: {recent_performance:.2f}, "
+                f"Previous avg: {previous_performance:.2f}, Ratio: {ratio:.2f}, "
+                f"Threshold: {self.performance_drop_threshold:.2f}")
 
         # Check for significant drop
         if recent_performance < previous_performance * self.performance_drop_threshold:
+            self.detection_metrics['detection_triggered'].append(True)
+            
             print(f"\n--- Performance Drop Detected at Episode {current_episode} ---")
             print(f"  Recent Avg Reward ({self.recent_window_size} episodes): {recent_performance:.2f}")
             print(f"  Previous Avg Reward ({self.context_detection_window - self.recent_window_size} episodes): {previous_performance:.2f}")
-            print(f"  Ratio: {recent_performance / previous_performance:.2f} (Threshold: {self.performance_drop_threshold:.2f})")
+            print(f"  Ratio: {ratio:.2f} (Threshold: {self.performance_drop_threshold:.2f})")
+            
+            # Record this detection
+            self.last_detection_episode = current_episode
             return True
-
+        
+        self.detection_metrics['detection_triggered'].append(False)
         return False
+    
+    
+    
+
+    def plot_detection_metrics(self, save_path=None):
+        """
+        Plot the detection metrics over time to visualize the performance detection mechanism.
+        
+        Args:
+            save_path (str, optional): Path to save the plot. If None, plot is displayed.
+        """
+        if not hasattr(self, 'detection_metrics') or len(self.detection_metrics['episode']) == 0:
+            print("No detection metrics available.")
+            return
+        
+        import matplotlib.pyplot as plt
+        
+        plt.figure(figsize=(12, 8))
+        
+        # Filter out None values for plotting
+        episodes = self.detection_metrics['episode']
+        valid_indices = []
+        
+        for i in range(len(episodes)):
+            if (self.detection_metrics['recent_performance'][i] is not None and
+                self.detection_metrics['previous_performance'][i] is not None):
+                valid_indices.append(i)
+        
+        if not valid_indices:
+            print("No valid metrics to plot.")
+            return
+        
+        valid_episodes = [episodes[i] for i in valid_indices]
+        valid_recent = [self.detection_metrics['recent_performance'][i] for i in valid_indices]
+        valid_previous = [self.detection_metrics['previous_performance'][i] for i in valid_indices]
+        
+        # Filter ratio indices separately (might have more None values)
+        ratio_indices = [i for i in valid_indices if self.detection_metrics['ratio'][i] is not None]
+        ratio_episodes = [episodes[i] for i in ratio_indices]
+        ratio_values = [self.detection_metrics['ratio'][i] for i in ratio_indices]
+        
+        # Get detection episodes
+        detection_episodes = [episodes[i] for i in range(len(episodes)) 
+                            if self.detection_metrics['detection_triggered'][i]]
+        
+        # Plot 1: Recent and Previous Performance
+        plt.subplot(2, 1, 1)
+        plt.plot(valid_episodes, valid_recent, 
+                label=f'Recent ({self.recent_window_size} episodes)', color='blue')
+        plt.plot(valid_episodes, valid_previous, 
+                label=f'Previous ({self.context_detection_window - self.recent_window_size} episodes)', color='green')
+        
+        # Mark detection points
+        if detection_episodes:
+            for e in detection_episodes:
+                plt.axvline(x=e, color='red', linestyle='--', alpha=0.7)
+        
+        plt.title('Performance Window Comparison')
+        plt.xlabel('Episodes')
+        plt.ylabel('Average Reward')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Plot 2: Performance Ratio
+        plt.subplot(2, 1, 2)
+        plt.plot(ratio_episodes, ratio_values, color='purple')
+        plt.axhline(y=self.performance_drop_threshold, color='red', linestyle='--', 
+                    label=f'Threshold ({self.performance_drop_threshold})')
+        
+        # Mark detection points
+        if detection_episodes:
+            for e in detection_episodes:
+                plt.axvline(x=e, color='red', linestyle='--', alpha=0.7)
+        
+        plt.title('Performance Ratio (Recent/Previous)')
+        plt.xlabel('Episodes')
+        plt.ylabel('Ratio')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        if save_path:
+            plt.savefig(save_path)
+        else:
+            plt.show()
     
     def train(self, num_episodes, change_priorities_at=None, detect_shifts_autonomously=False):
     # def train(self, num_episodes, change_priorities_at=None):
@@ -1606,7 +1753,7 @@ class QLearningAgentMaxInfoRL:
             # Check if we need to change priorities at this episode
             if change_priorities_at and episode in change_priorities_at:
                 print(f"\n--- Explicit Priority Change Triggered at Episode {episode} ---")
-                # self.change_collection_priorities(change_priorities_at[episode], episode)
+                self.change_collection_priorities(change_priorities_at[episode], episode)
                 # Partially reset Q-tables to encourage re-exploration
                 # self._partial_reset_q_tables()
         
