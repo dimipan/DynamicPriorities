@@ -1301,17 +1301,15 @@ class QLearningAgentMaxInfoRL:
         print(f"\nCollection priorities changed at episode {episode}")
         print(f"New collection order: {new_order_map}")
 
-        # # --- Activate Epsilon Boost ---
-        # if not self.epsilon_boost_active: # Avoid boosting if already boosting
-        #     self.epsilon_boost_active = True
-        #     self.epsilon_boost_episodes_remaining = self.epsilon_boost_duration
-        #     self.original_epsilon_before_boost = self.EPSILON
-        #     boosted_epsilon = min(self.EPSILON_MAX, self.EPSILON * self.epsilon_boost_factor)
-        #     self.EPSILON = boosted_epsilon
-        #     print(f"Priority change detected: Boosting Epsilon to {self.EPSILON:.4f} for {self.epsilon_boost_duration} episodes.")
-        # # --- End Epsilon Boost Activation ---
-    
-
+        # --- Activate Epsilon Boost ---
+        if not self.epsilon_boost_active: # Avoid boosting if already boosting
+            self.epsilon_boost_active = True
+            self.epsilon_boost_episodes_remaining = self.epsilon_boost_duration
+            self.original_epsilon_before_boost = self.EPSILON
+            boosted_epsilon = min(self.EPSILON_MAX, self.EPSILON * self.epsilon_boost_factor)
+            self.EPSILON = boosted_epsilon
+            print(f"Priority change detected: Boosting Epsilon to {self.EPSILON:.4f} for {self.epsilon_boost_duration} episodes.")
+        # --- End Epsilon Boost Activation ---
     
     
     def _partial_reset_q_tables(self):
@@ -1637,7 +1635,6 @@ class QLearningAgentMaxInfoRL:
         return False
     
     
-    
 
     def plot_detection_metrics(self, save_path=None):
         """
@@ -1649,9 +1646,7 @@ class QLearningAgentMaxInfoRL:
         if not hasattr(self, 'detection_metrics') or len(self.detection_metrics['episode']) == 0:
             print("No detection metrics available.")
             return
-        
-        import matplotlib.pyplot as plt
-        
+                
         plt.figure(figsize=(12, 8))
         
         # Filter out None values for plotting
@@ -1755,7 +1750,7 @@ class QLearningAgentMaxInfoRL:
                 print(f"\n--- Explicit Priority Change Triggered at Episode {episode} ---")
                 self.change_collection_priorities(change_priorities_at[episode], episode)
                 # Partially reset Q-tables to encourage re-exploration
-                # self._partial_reset_q_tables()
+                self._partial_reset_q_tables()
         
             if episode % 500 == 0:
                 print(f"episode: {episode} | reward: {Rewards} | epsilon: {self.EPSILON}")
