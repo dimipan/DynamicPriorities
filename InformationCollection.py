@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Tuple
-from robot_utils import RobotAction, InformationCollectionActions
+from robot_utils import RobotAction
 
 # a data container that represents a location where information can be collected in the game grid
 @dataclass
@@ -114,10 +114,7 @@ class InfoCollectionSystem:
     def get_collection_action_index(self, action_name: str, hierarchical: bool = False) -> Optional[int]:
         """Convert predicted action name to action index for the agent."""
         try:
-            if hierarchical:
-                return InformationCollectionActions[action_name].value
-            else:
-                return RobotAction[action_name].value
+            return RobotAction[action_name].value
         except KeyError:
             return None
 

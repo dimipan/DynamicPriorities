@@ -6,7 +6,7 @@ from termcolor import colored
 import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.signal import savgol_filter  # Consider using this for smoothing
-from robot_utils import RobotOption, _get_action_name
+from robot_utils import _get_action_name
 
 
 def evaluate_trained_policy(agent, learned_policy_files, test_episodes=1):
@@ -47,29 +47,12 @@ def evaluate_trained_policy(agent, learned_policy_files, test_episodes=1):
         collisions = []
 
         while not terminated:
-            if isinstance(learned_policy_files, dict):
-                # Hierarchical agent
-                current_option = np.argmax(manager_policy[state])
-                # Use worker policy for current option
-                action = np.argmax(worker_policies[current_option][state])
-                next_obs, reward, terminated, _, _ = agent.env.step(action)
-                next_state = agent._get_state(next_obs)
-                print(f"Step {step+1}: || State={state} || Option={RobotOption(current_option).name} || "
-                      f"Action={_get_action_name(current_option, action)} || Reward={reward} || "
-                      f"Next State={next_state} || Done={terminated}")
-            else:
-                # Flat agent
-                action = np.argmax(learned_policy[state])
-                next_obs, reward, terminated, _, _ = agent.env.step(action)
-                next_state = agent._get_state(next_obs)
-                print(f"Step {step+1}: || State={state} || Action={_get_action_name(None, action)} || "
-                      f"Reward={reward} || Next State={next_state} || Done={terminated}")
-
-            # Check for collisions
-            if tuple([state[0], state[1]]) in agent.env.sar_robot.GENERAL_FIRES_UNKNOWN_TO_THE_AGENT and state[2] == agent.env.sar_robot.info_number_needed:
-                print(colored("Robot is in fire!", "red"))
-                collision_count += 1
-                collisions.append(tuple([state[0], state[1]]))
+            # Flat agent
+            action = np.argmax(learned_policy[state])
+            next_obs, reward, terminated, _, _ = agent.env.step(action)
+            next_state = agent._get_state(next_obs)
+            print(f"Step {step+1}: || State={state} || Action={_get_action_name(None, action)} || "
+                    f"Reward={reward} || Next State={next_state} || Done={terminated}")
 
             total_return += reward
             time.sleep(0.5)  # Optional: slow down the evaluation for better visualization
