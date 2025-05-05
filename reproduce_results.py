@@ -119,15 +119,16 @@ agent_types = [
     }
 ]
 
-
-# Path to the results file   logs_new_single/logs/multi_env_comparison_parallel_20250502_194121/all_results.pkl
+######   S    O    S   ######
+# Path to the results file   #### when extracting from the pickle file, use the path to the directory where the results are stored
+# Note: The path should be updated to the actual location of the results file
 log_dir = "logs_new_single/logs/multi_env_comparison_parallel_20250502_194121"
 results_file = os.path.join(log_dir, "all_results.pkl")
 
 # Load the pickle file
 with open(results_file, 'rb') as f:
     results = pickle.load(f)
-
+######   S    O    S   ######
 
 
 def generate_summary_visualizations(all_results, agent_types, env_configs, log_dir):
